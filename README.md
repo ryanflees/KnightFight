@@ -17,7 +17,7 @@ python3 -m http.server 8000
 
 | Input | Action |
 | --- | --- |
-| Mouse | Aim the lance tip. The reticle shows the zone you would hit |
+| Mouse | The lance tip follows the cursor (arm IK). The reticle on the tip shows the zone you would hit; faint outlines mark where the opponent will pass |
 | `W` / `Shift` (hold) | Spur the horse (faster = harder hit, but more lance wobble) |
 | `S` | Rein in |
 | `Space` (hold) | Brace in the saddle. Best pressed about 0.5 s before impact |
@@ -36,7 +36,8 @@ python3 -m http.server 8000
 
 - Golden-hour lighting with soft shadows, image-based reflections on the plate armour, bloom, and a film grade (split-tone, vignette, grain)
 - Animated crowd of around 1,500 that cheers by side, waving banners, confetti bursts on unhorsing or victory
-- Procedural gallop cycle, cloth caparisons, a fluttering cape, recoil on impact, and tumble physics when a knight is unhorsed
+- Lofted horse anatomy (dappled grey and bay) with full tack and reins; a knight in a frog-mouth jousting helm and articulated plate, with two-bone IK on both arms
+- Procedural gallop cycle, heraldic cape, recoil on impact, and tumble physics when a knight is unhorsed
 - Lance shatters into physical splinters, with a slow-motion beat and camera shake
 - Full replay after every course: a director cam (tracking, impact close-up, fall shot), free orbit, follow either rider, scrubbable timeline, and automatic slow motion around the impact
 - Three AI difficulty levels; the AI picks targets, aims with error, times its brace, and gets bolder when behind
@@ -49,7 +50,8 @@ index.html        HUD + screens
 css/style.css     UI styling
 js/main.js        render pipeline, state machine, input, cameras, HUD, replay player
 js/world.js       arena, castle, stands, crowd, props, sky
-js/knight.js      horse + knight rig, animation, lance, unhorse physics
+js/knight.js      horse + knight rig, animation, arm IK, lance, unhorse physics
+js/rig.js         loft geometry, steel/cloth/coat materials
 js/combat.js      hit zones, strike resolution, AI
 js/fx.js          splinters, dust, confetti, impact flash
 js/audio.js       synthesised sound

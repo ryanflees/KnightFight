@@ -200,3 +200,4 @@ body.carded #hud .speed, body.carded #hud .stance, body.carded #touchCtl { opaci
   .controls-mini { display: none; }
   .scoreboard { transform: translateX(-50%) scale(0.85); transform-origin: top center; }
 }
+#aimCursor { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: rgba(243, 234, 214, 0.55); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); pointer-events: none; }

@@ -96,17 +96,19 @@ const sound = new Sound();
 // ------------------------------------------------------------------ riders
 const player = new Rider({
   facing: 1, tabard: '#1d5650', charge: '#e9e4d2', trimCloth: '#d6ae52', trim: '#d6ae52', plume: '#2f8a7e',
-  horseCoat: '#857e76', maneColor: '#35312e', shieldKind: 'falcon', lanceA: '#ece5d0', lanceB: '#1d5650',
+  horseCoat: '#a29d96', coatKind: 'dapple', pointsColor: '#57524d', maneColor: '#3a3633', shieldKind: 'falcon', lanceA: '#ece5d0', lanceB: '#1d5650',
 });
 const opp = new Rider({
   facing: -1, tabard: '#97291f', charge: '#e1b74e', trimCloth: '#e1b74e', trim: '#d6ae52', plume: '#d24b3a',
-  horseCoat: '#6b3a22', maneColor: '#2a1a12', shieldKind: 'stag', lanceA: '#e1b74e', lanceB: '#97291f',
+  horseCoat: '#7a3f20', coatKind: 'bay', pointsColor: '#1f1712', maneColor: '#17110d', shieldKind: 'stag', lanceA: '#e1b74e', lanceB: '#97291f',
 });
 scene.add(player.root, opp.root);
 for (const r of [player, opp]) {
   r.stamina = 1; r.braceHeldFor = 0; r.ax = 0; r.ay = 2.1; r.struck = false; r.result = null;
 }
 player.colors = ['#ece5d0', '#1d5650'];
+player._dir = new THREE.Vector3(0.6, 0.08, 0.8).normalize();
+player._swayDir = player._dir.clone();
 opp.colors = ['#e1b74e', '#97291f'];
 
 // Aim guide: faint outlines of the zones where the opposing knight will pass.
@@ -343,6 +345,37 @@ function aimDirFor(r, ax, ay) {
   return _v.set(dx, dy, dz).normalize();
 }
 
+// Lance-tip IK target: the direction (rider root frame) that puts the tip under the cursor.
+// The camera ray through the cursor is intersected with a sphere of lance length around the grip.
+const raycaster = new THREE.Raycaster();
+const _ndc = new THREE.Vector2(), _rq = new THREE.Quaternion();
+const AIM = { yawMin: -0.3, yawMax: 1.08, pitchMin: -0.42, pitchMax: 0.5 };
+function cursorAimDir(r) {
+  _ndc.set(clamp(input.ax, -1, 1), -clamp(input.ay, -1, 1));
+  raycaster.setFromCamera(_ndc, camera);
+  r.root.updateMatrixWorld(true);
+  r.root.getWorldQuaternion(_rq).invert();
+  const O = r.root.worldToLocal(raycaster.ray.origin.clone());
+  const D = raycaster.ray.direction.clone().applyQuaternion(_rq);
+  const H = r.root.worldToLocal(r.handWorld(new THREE.Vector3()));
+  const L = LANCE.front;
+  const f = O.clone().sub(H);
+  const b = f.dot(D), disc = b * b - (f.lengthSq() - L * L);
+  let P;
+  if (disc >= 0) {
+    // two candidate tip positions on the ray — take the one further down the lists
+    const P1 = O.clone().addScaledVector(D, -b - Math.sqrt(disc));
+    const P2 = O.clone().addScaledVector(D, -b + Math.sqrt(disc));
+    P = P1.z > P2.z ? P1 : P2;
+  } else {
+    P = O.clone().addScaledVector(D, Math.max(0, -b)); // out of reach: point at the nearest spot
+  }
+  const dir = P.sub(H).normalize();
+  const yaw = clamp(Math.atan2(dir.x, dir.z), AIM.yawMin, AIM.yawMax);
+  const pitch = clamp(Math.asin(clamp(dir.y, -1, 1)), AIM.pitchMin, AIM.pitchMax);
+  return new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+}
+
 function sway(r, t, swayK) {
   const sp = clamp(r.speed / 15, 0, 1.2);
   const amp = ((0.035 + 0.11 * sp) * (1 - 0.55 * r.brace) + 0.16 * Math.pow(1 - r.stamina, 2)) * swayK;
@@ -385,14 +418,12 @@ function simulate(dt) {
   if (player.unhorsed && G.state === 'runout') target = Math.max(0, player.speed - 1);
   player.speed += clamp(target - player.speed, -4.2 * dt, 3.3 * dt);
   braceStep(player, input.brace && G.state !== 'runout', dt);
-  // aim (lance has inertia; bracing steadies it but slows tracking)
-  const lxDes = clamp(input.ax, -1, 1) * 0.85;
-  const dyDes = 0.45 - clamp(input.ay, -1, 1) * 0.95;
+  // aim: the tip chases the cursor (a heavy lance lags a little; bracing steadies but slows it)
   const [sx, sy] = sway(player, t, 1);
-  const kAim = damp(player.brace > 0.5 ? 3.5 : 7, dt);
-  player.ax += (-lxDes - player.ax) * kAim;
-  player.ay += (PELVIS_Y + dyDes - player.ay) * kAim;
-  player._aimAx = player.ax + sx; player._aimAy = player.ay + sy;
+  player._dir.lerp(cursorAimDir(player), damp(player.brace > 0.5 ? 7 : 12, dt)).normalize();
+  player._swayDir.copy(player._dir);
+  player._swayDir.x += sx / 3.4; player._swayDir.y += sy / 3.4;
+  player._swayDir.normalize();
 
   // ---- AI control
   const thought = ai.think(t, e);
@@ -414,7 +445,7 @@ function simulate(dt) {
     r.lanceLower = clamp(r.lanceLower + (lowerWanted ? dt / 1.3 : -dt / 1.6), 0, 1);
     r.recoil = Math.max(0, r.recoil - dt * 1.6);
     r.root.updateMatrixWorld(true);
-    r.setAimDirection(aimDirFor(r, r._aimAx, r._aimAy));
+    r.setAimDirection(r === player ? player._swayDir : aimDirFor(r, r._aimAx, r._aimAy));
     r.animate(dt);
     r.stepTumblers(dt);
   }
@@ -760,24 +791,25 @@ function updateHud() {
   $('stamBar').style.width = `${player.stamina * 100}%`;
   $('braceBar').style.width = `${player.brace * player.stamina * 100}%`;
 
-  // reticle = projected lance-tip aim point, coloured by the zone it would strike
+  // reticle sits on the real lance tip, coloured by the zone it would strike when the foe passes;
+  // a small dot marks the cursor so the lance's lag is readable
   const ret = $('reticle');
-  const showRet = G.state === 'charge' && player.lanceLower > 0.4 && !player.struck && G.view === 'chase';
+  const showRet = G.state === 'charge' && player.lanceLower > 0.4 && !player.struck;
   ret.classList.toggle('hidden', !showRet);
+  $('aimCursor').classList.toggle('hidden', !showRet);
   const e = eta();
+  player.lanceTipWorld(tmpTip);
+  const tl = player.root.worldToLocal(tmpTip.clone());
+  ghost.position.set(2 * LANE, 0, tl.z);
   if (showRet) {
-    proj.set(2 * LANE + player._aimAx, player._aimAy, 0);
-    player.handWorld(tmpHand); player.root.worldToLocal(tmpHand);
-    const dx = proj.x - tmpHand.x, dy = proj.y - tmpHand.y;
-    proj.z = tmpHand.z + Math.sqrt(Math.max(0.4, LANCE.front ** 2 - dx * dx - dy * dy));
-    player.root.localToWorld(proj);
-    proj.project(camera);
+    proj.copy(tmpTip).project(camera);
     ret.style.transform = `translate(${(proj.x * 0.5 + 0.5) * window.innerWidth}px, ${(-proj.y * 0.5 + 0.5) * window.innerHeight}px)`;
-    const hit = classify(-player._aimAx, player._aimAy - PELVIS_Y);
+    $('aimCursor').style.transform = `translate(${(input.ax * 0.5 + 0.5) * window.innerWidth}px, ${(input.ay * 0.5 + 0.5) * window.innerHeight}px)`;
+    const hit = classify(-(tl.x - 2 * LANE), tl.y - PELVIS_Y);
     ret.className = hit.zone === 'helm' ? 'helm' : hit.zone === 'shield' || hit.zone === 'body' ? 'shield' : hit.zone === 'low' ? '' : 'miss';
     $('retLabel').textContent = hit.zone ? `${ZONES[hit.zone].name} +${ZONES[hit.zone].points}` : '落空';
   }
-  setGhostOpacity(G.state === 'charge' && !player.struck && G.view === 'chase' ? clamp((4.2 - e) / 2.5, 0, 0.55) * player.lanceLower : 0);
+  setGhostOpacity(G.state === 'charge' && !player.struck && G.view === 'chase' ? (0.2 + clamp((4.2 - e) / 2.5, 0, 1) * 0.4) * player.lanceLower : 0);
 
   // distance tag over the opponent
   const tag = $('foeTag');
