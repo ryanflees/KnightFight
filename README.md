@@ -4,7 +4,11 @@ A 3D medieval jousting game that runs in the browser. You ride as the Grey Falco
 
 Everything is procedural: the arena, castle, crowd, horses, knights, heraldry, textures and sound are all generated in code. The only dependency is three.js r170, which is vendored in `lib/`, so the game runs offline with no build step.
 
-## Run
+## Play online
+
+https://ryanflees.github.io/KnightFight/ (hard-refresh with Ctrl+Shift+R after an update)
+
+## Run locally
 
 Any static file server works (ES modules need `http://`, not `file://`):
 
