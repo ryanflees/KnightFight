@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>金枪比武 · The Gilded Tilt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    { "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }
+  </script>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <!-- helm (visor) view mask -->
+  <div id="visor" class="hidden"><div class="slit"></div></div>
+  <div id="vignette"></div>
+  <div id="fade"></div>
+
+  <!-- ===================== HUD ===================== -->
+  <div id="hud" class="hidden">
+    <div class="brand">
+      <svg viewBox="0 0 40 46" class="crest"><path d="M20 2 L37 8 V22 C37 33 29 40 20 44 C11 40 3 33 3 22 V8 Z" /><path class="star" d="M20 12 L22.5 21 L31 23 L22.5 25 L20 34 L17.5 25 L9 23 L17.5 21 Z" /></svg>
+      <div><div class="brand-en">THE GILDED TILT</div><div class="brand-cn">金 枪 比 武</div></div>
+    </div>
+
+    <div class="scoreboard">
+      <div class="team you"><span class="tname">灰隼骑士 · 你</span><span class="score" id="scoreP">00</span></div>
+      <div class="round"><div class="rcn" id="roundCn">第一轮</div><div class="ren" id="roundEn">THE OPENING COURSE</div><div class="dots" id="roundDots"></div></div>
+      <div class="team foe"><span class="score" id="scoreO">00</span><span class="tname">赤鹿骑士</span></div>
+    </div>
+
+    <div class="topright">
+      <button id="btnView" title="切换视角 (V)">视角 V</button>
+      <button id="btnMute" title="声音 (M)">声音</button>
+      <button id="btnHelp" title="帮助 (H)">?</button>
+    </div>
+
+    <div id="announce"><div class="small" id="annSmall"></div><div class="big" id="annBig"></div><div class="sub" id="annSub"></div></div>
+
+    <div id="reticle" class="hidden"><div class="ring"></div><div class="dot"></div><div class="label" id="retLabel">枪尖瞄准</div></div>
+    <div id="foeTag" class="hidden"><span id="foeDist">--</span></div>
+
+    <div class="speed">
+      <div class="lbl">战马速度</div>
+      <div class="val"><span id="speedVal">0</span><small>km/h</small></div>
+      <div class="bar"><i id="speedBar"></i></div>
+      <div class="spur" id="spurHint">按住 <kbd>W</kbd> 催马</div>
+    </div>
+
+    <div class="stance">
+      <div class="lbl" id="stanceLbl">安坐鞍上</div>
+      <div class="bar"><i id="stamBar"></i><b id="braceBar"></b></div>
+      <div class="hint"><kbd>SPACE</kbd> 按住稳身 · 把握撞击时机 &nbsp; <kbd>鼠标</kbd> 枪尖瞄准</div>
+    </div>
+
+    <!-- touch controls -->
+    <div id="touchCtl">
+      <button id="tSpur">催马</button>
+      <button id="tBrace">稳身</button>
+    </div>
+  </div>
+
+  <!-- ===================== TITLE ===================== -->
+  <div id="title" class="screen">
+    <div class="title-card">
+      <svg viewBox="0 0 40 46" class="crest big"><path d="M20 2 L37 8 V22 C37 33 29 40 20 44 C11 40 3 33 3 22 V8 Z" /><path class="star" d="M20 12 L22.5 21 L31 23 L22.5 25 L20 34 L17.5 25 L9 23 L17.5 21 Z" /></svg>
+      <div class="kicker">A TOURNAMENT OF THE REALM</div>
+      <h1>金枪比武</h1>
+      <div class="sub-en">THE GILDED TILT</div>
+      <p class="lede">你是<b class="g">灰隼骑士</b>。隔着比武栏，<b class="r">赤鹿骑士</b>已经放下了面甲。<br />三轮冲锋，碎枪得分 —— 将他挑落马下，即刻封王。</p>
+      <div class="diff" id="diffPick">
+        <button data-d="squire">侍从<small>宽容</small></button>
+        <button data-d="knight" class="on">骑士<small>标准</small></button>
+        <button data-d="champion">冠军<small>严苛</small></button>
+      </div>
+      <button id="btnStart" class="primary">进入比武场</button>
+      <div class="controls-mini">
+        <span><kbd>鼠标</kbd> 瞄准枪尖</span><span><kbd>W</kbd> 催马</span><span><kbd>SPACE</kbd> 稳身</span><span><kbd>V</kbd> 视角</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== HELP ===================== -->
+  <div id="help" class="screen hidden">
+    <div class="panel">
+      <h2>比武规则 <small>RULES OF THE TILT</small></h2>
+      <div class="cols">
+        <div>
+          <h3>操作</h3>
+          <ul>
+            <li><kbd>鼠标</kbd> 移动枪尖 —— 准星会显示将要命中的部位</li>
+            <li><kbd>W</kbd> / <kbd>Shift</kbd> 按住催马加速，<kbd>S</kbd> 勒马</li>
+            <li><kbd>SPACE</kbd> 按住稳身：夹紧马镫、压低骑枪</li>
+            <li><kbd>V</kbd> 切换骑士背后 / 面甲内视角</li>
+            <li><kbd>Esc</kbd> 暂停 &nbsp; <kbd>M</kbd> 静音</li>
+          </ul>
+        </div>
+        <div>
+          <h3>得分</h3>
+          <ul>
+            <li>碎枪击中 <b>头盔</b> +3（目标小，风险高）</li>
+            <li>碎枪击中 <b>盾牌 / 胸甲</b> +2</li>
+            <li>枪未折断的擦击 +1</li>
+            <li><b>挑落对手</b> —— 立即获胜</li>
+          </ul>
+        </div>
+        <div>
+          <h3>稳身的诀窍</h3>
+          <ul>
+            <li>撞击前 <b>约半秒</b> 按住 SPACE 最理想 —— 冲击力更强，也更不易落马</li>
+            <li>按得太早会消耗体力，体力见底时稳身效果大减</li>
+            <li>速度越快冲击越大，但枪尖晃动也越厉害</li>
+          </ul>
+        </div>
+      </div>
+      <button class="primary" id="btnHelpClose">回到比武</button>
+    </div>
+  </div>
+
+  <!-- ===================== PAUSE ===================== -->
+  <div id="pause" class="screen hidden">
+    <div class="panel narrow">
+      <h2>暂停 <small>INTERMISSION</small></h2>
+      <button class="primary" id="btnResume">继续</button>
+      <button id="btnRestart">重新开始</button>
+    </div>
+  </div>
+
+  <!-- ===================== PASS RESULT ===================== -->
+  <div id="passCard" class="screen hidden">
+    <div class="panel result">
+      <div class="kicker" id="pcKicker">第一轮 · 结果</div>
+      <div class="rows">
+        <div class="row you"><span class="who">灰隼骑士</span><span class="what" id="pcYou">—</span><span class="pts" id="pcYouPts">+0</span></div>
+        <div class="row foe"><span class="who">赤鹿骑士</span><span class="what" id="pcFoe">—</span><span class="pts" id="pcFoePts">+0</span></div>
+      </div>
+      <div class="note" id="pcNote"></div>
+      <div class="btns">
+        <button id="btnReplay">观看回放 <kbd>R</kbd></button>
+        <button class="primary" id="btnNext">下一轮 <kbd>Enter</kbd></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MATCH END ===================== -->
+  <div id="endCard" class="screen hidden">
+    <div class="panel result end">
+      <div class="kicker" id="ecKicker">比武结束</div>
+      <h1 id="ecTitle">胜利</h1>
+      <div class="sub-en" id="ecSub">THE CROWN IS YOURS</div>
+      <div class="final"><span class="g" id="ecP">0</span><i>:</i><span class="r" id="ecO">0</span></div>
+      <div class="note" id="ecNote"></div>
+      <div class="btns">
+        <button id="btnEndReplay">最后回放</button>
+        <button class="primary" id="btnAgain">再战一场</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== REPLAY ===================== -->
+  <div id="replayTop" class="hidden">
+    <div class="kicker">THE ENCOUNTER / 本轮回放</div>
+    <div class="rt-title" id="rpTitle">第 1 轮回放</div>
+    <div class="rt-speed" id="rpSpeedLbl">正常播放 · 1×</div>
+  </div>
+  <div id="replayBar" class="hidden">
+    <div class="rb-row">
+      <button id="rpPlay">暂停回放</button>
+      <label>视角</label>
+      <select id="rpCam">
+        <option value="auto">导演视角</option>
+        <option value="free">自由全景</option>
+        <option value="player">跟随灰隼骑士</option>
+        <option value="opp">跟随赤鹿骑士</option>
+        <option value="side">侧面跟拍</option>
+        <option value="impact">撞击特写</option>
+      </select>
+      <button id="rpFrame">重新框住双方</button>
+      <select id="rpRate">
+        <option value="1">1×</option>
+        <option value="0.5">0.5×</option>
+        <option value="0.25">0.25×</option>
+      </select>
+      <span class="grow"></span>
+      <button class="primary" id="rpSkip">跳过回放 →</button>
+    </div>
+    <div class="rb-row meta"><span id="rpPhase">双方正在接近</span><span class="grow"></span><span id="rpTime">0.0 / 0.0 秒</span></div>
+    <div class="timeline">
+      <div class="slow" id="rpSlow"></div>
+      <div class="mark" id="rpMark"></div>
+      <input type="range" id="rpScrub" min="0" max="1000" value="0" />
+    </div>
+    <div class="rb-hint">自由全景：左键旋转 · 滚轮缩放 · 右键平移。拖动时间轴可定位并暂停，金色区间为慢动作。</div>
+  </div>
+
+  <div id="loading" class="screen"><div class="loading-txt">搭建比武场…</div></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
